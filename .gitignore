@@ -234,5 +234,9 @@ notes/
 *.bak
 *.tmp
 
+# Sensitive artifacts (design docs, exports, anything private).
+# Nothing in this folder is ever committed or pushed to GitHub.
+documents/
+
 # Claude Code session files
 .claude/

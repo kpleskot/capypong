@@ -39,7 +39,8 @@ and never gets committed or pushed. This repo's file has two parts:
   project grows Python tooling later.
 - **Web project extras** (the short bottom section): operating system junk
   files, personal editor settings, `scratch/` and `notes/` folders for
-  drafts that shouldn't be published, and local session files.
+  drafts that shouldn't be published, a `documents/` folder for sensitive
+  artifacts that must never reach GitHub, and local session files.
 
 To ignore something new, add one pattern per line: a trailing `/` means
 "a folder", and `*` is a wildcard (so `*.bak` ignores every backup file).
