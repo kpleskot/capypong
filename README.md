@@ -9,8 +9,8 @@ Keep the rally going and beat the opposing capybara.
 
 | Input | Action |
 |-------|--------|
-| Arrow keys or `A` / `D` | Move your paddle left and right |
-| Mouse or touch | Steer the paddle directly |
+| Arrow keys or `A` / `D` | Walk your capybara left and right |
+| Mouse or touch | Your capybara follows the cursor (or your finger) |
 | `Space` or click/tap | Serve the ball |
 | `P` | Pause / unpause |
 | `Esc` | Open the pause menu |
