@@ -23,11 +23,27 @@ Keep the rally going and beat the opposing capybara.
 
 | Input | Action |
 |-------|--------|
-| Arrow keys or `A` / `D` | Move your paddle left and right |
-| Mouse or touch | Steer the paddle directly |
+| Arrow keys or `A` / `D` | Walk your capybara left and right |
+| Mouse or touch | Your capybara follows the cursor (or your finger) |
 | `Space` or click/tap | Serve the ball |
 | `P` | Pause / unpause |
 | `Esc` | Open the pause menu |
+
+### Power-ups (optional)
+
+Tick the **Power-Ups** box on the menu and treats appear on the table
+during rallies. Whoever touched the ball last collects them:
+
+- 🍃 **Leaf** — your capy snacks it and grows extra chonky for about
+  ten seconds, blocking more shots.
+- 🔥 **Flame** — arms your next return: one fiery, extra-fast shot.
+- 🐾 **Capy pup** — a little helper guards your back line for about
+  fifteen seconds.
+- **Combo:** grab a leaf while your pup is out and the pup shares the
+  snack and grows big too.
+
+The rival capybara can collect power-ups the same way, so watch who
+touched the ball last.
 
 ## Run it locally
 
