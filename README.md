@@ -3,6 +3,20 @@ A capybara table-tennis game in the browser
 
 **Play it:** https://kpleskot.github.io/capypong (once GitHub Pages is turned on)
 
+## What's in the game
+
+- **Six playable capybaras**, each with their own style and special serve:
+  Mochi the All-Rounder, Turbo the Speedster, Boba the Wall, Yuzu the
+  Trickster, Sakura the Flutterer, and Momo the Slugger.
+- **Three modes:** Quick Match (first to 3–15 points, your choice),
+  Survival (play till you lose, difficulty keeps climbing), and
+  Tournament (beat all five rivals in a row).
+- **Obstacle Course toggle:** crated capy pups, steamy hot springs,
+  yuzus, and warm rocks dot the table and boomerang the ball back.
+- **Onsen Rating:** a chess-style skill rating that rises and falls
+  with your wins and losses, saved in your browser.
+- **Milestones and a leaderboard** to track your best runs.
+
 ## How to play
 
 Keep the rally going and beat the opposing capybara.
@@ -49,7 +63,16 @@ To ignore something new, add one pattern per line: a trailing `/` means
 
 Ideas for future improvement. Each one becomes its own branch.
 
-- [ ] (to be decided)
+- [ ] **Power-ups** — leaf (your capy grows chonky), flame (one fiery
+  return), and a capy pup helper. In progress on the `add-power-ups` branch.
+- [ ] **Hot-springs progression** — the reward for winning a round is a
+  trip to a different hot spring to chill in.
+- [ ] **Multiball mode** — more than one ball in play at once, possibly
+  as a power-up.
+- [ ] **Extra points** — special ways to score bonus points; many kinds
+  are possible.
+- [ ] **Sabotage items** — Mario Kart-style: boost yourself, or briefly
+  (and visibly, and funnily) inconvenience your rival.
 
 ## Credits
 
