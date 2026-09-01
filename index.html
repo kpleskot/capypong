@@ -196,6 +196,12 @@
           <small>Crated capy pups, steamy hot springs, yuzus, and warm rocks dot the table. Bonk one and the ball boomerangs right back at you.</small>
         </span>
       </label>
+      <label class="togglerow" style="margin-top:8px">
+        <input type="checkbox" id="puToggle">
+        <span>Power-Ups
+          <small>Hit a leaf and your capy snacks it and grows extra chonky, blocking more shots. A flame arms one fiery return. A capy pup guards your back line. Whoever touched the ball last gets the reward. Combo: a pup that shares a leaf grows big!</small>
+        </span>
+      </label>
     </div>
     <div class="modes">
       <button class="btn modebtn" id="startBtn">QUICK MATCH</button>
@@ -334,6 +340,8 @@ let particles = [], steam = [], shake = 0, flashT = 0, flashCol = "#fff";
 let inputMode = "mouse", mouseX = W/2, keys = {};
 let muted = false, actx = null;
 let obstaclesOn = false, obstacles = [], lastHit = "player";
+let powerupsOn = false, powerups = [], puTimer = 0;
+let cheat = false, cheatUsed = false;   // dev cheat mode: C to toggle, see keydown handler
 let serveMsg = "", serveMsgT = 0;
 
 /* ---------- Modes & progression ---------- */
@@ -432,16 +440,17 @@ function newMatch(rival){
   const c = CHARS[selChar];
   const pool = CHARS.filter((_,i)=>i!==selChar);
   const rc = rival || pool[Math.floor(Math.random()*pool.length)];
-  player = {x:W/2, y:H-64, w:c.w, speed:c.speed, power:c.power, spinPow:c.spin, vx:0, px:W/2, char:c, score:0};
-  ai     = {x:W/2, y:64,   w:rc.w, speed:diffAiSpeed(), power:0.95, spinPow:0.5, vx:0, px:W/2, char:rc, score:0, err:rollAiErr(), serveT:0};
-  particles = []; shake = 0; flashT = 0;
+  player = {x:W/2, y:H-64, w:c.w, baseW:c.w, boostT:0, flame:false, helperT:0, helperX:W/2, speed:c.speed, power:c.power, spinPow:c.spin, vx:0, px:W/2, char:c, score:0};
+  ai     = {x:W/2, y:64,   w:rc.w, baseW:rc.w, boostT:0, flame:false, helperT:0, helperX:W/2, speed:diffAiSpeed(), power:0.95, spinPow:0.5, vx:0, px:W/2, char:rc, score:0, err:rollAiErr(), serveT:0};
+  particles = []; shake = 0; flashT = 0; cheatUsed = false;
   serve("player");
 }
 function serve(who){
   server = who; state = "serve"; ai.serveT = 0;
   ball = {x:(who==="player"?player.x:ai.x), y:(who==="player"?player.y-24:ai.y+24),
-          vx:0, vy:0, spd:diffBall(), spin:0, wobble:0, fxCol:"255,250,230", obTotal:0, trail:[]};
+          vx:0, vy:0, spd:diffBall(), spin:0, wobble:0, flaming:false, fxCol:"255,250,230", obTotal:0, trail:[]};
   if(obstaclesOn) spawnObstacles(); else obstacles = [];
+  powerups = []; puTimer = 140;
 }
 function launch(){
   const dir = server==="player" ? -1 : 1;
@@ -459,6 +468,54 @@ function launch(){
   ball.fxCol = FX_COL[srv.special] || "255,250,230";
   sHit(sp * (sv.spd > 1.15 ? 1.2 : 1));
 }
+
+/* ---------- Power-ups ---------- */
+const PU_DEFS = {leaf:{r:12}, flame:{r:12}, helper:{r:12}};
+const BOOST_FRAMES = 600;   // chonky-capy duration in frames (600 ≈ 10 seconds, Mega Mushroom territory)
+const BOOST_WIDTH = 1.5;    // boosted paddle grows to 150% of normal width
+const HELPER_FRAMES = 900;  // capy pup helper sticks around ≈ 15 seconds
+const HELPER_SPEED = 4.2;   // pups are eager but not fast
+const HELPER_W = 44;        // pup paddle reach
+const GROWN_SCALE = 1.5;    // leaf + pup combo: a pup that shares the leaf grows half again as wide
+
+// one source of truth for pup width: grown while its side's leaf is active
+function helperW(p){ return p.boostT > 0 ? HELPER_W * GROWN_SCALE : HELPER_W; }
+
+function applyPowerUp(side, type){
+  const p = side === "player" ? player : ai;
+  const hadPup = p.helperT > 0, hadLeaf = p.boostT > 0;
+  if(type === "leaf"){
+    p.boostT = BOOST_FRAMES;      // wide paddle: the update loop widens p while this ticks down
+    if(hadPup) pupGrows(p, side); // the pup shares the snack
+  }else if(type === "flame"){
+    p.flame = true;               // armed: the NEXT hit by this paddle is a flaming return
+  }else if(type === "helper"){
+    p.helperT = HELPER_FRAMES;    // a capy pup guards this side's back line
+    p.helperX = p.x;
+    if(hadLeaf) pupGrows(p, side); // arriving mid-leaf: the pup gets a bite too
+  }
+}
+
+function pupGrows(p, side){
+  const y = side === "player" ? H-30 : 30;
+  puff(p.helperX, y, 12, "#9fe0a8"); puff(p.helperX, y, 6, "#f0d9b5");
+  beep(500,.08,"triangle",.05); setTimeout(()=>beep(750,.1,"triangle",.05),90);
+}
+
+function spawnPowerup(){
+  const roll = Math.random();
+  const type = roll < 0.45 ? "leaf" : roll < 0.8 ? "flame" : "helper";  // pups are the rare treat
+  const rad = PU_DEFS[type].r;
+  for(let tries=0;tries<40;tries++){
+    const x = TBL + 30 + rad + Math.random() * (W - 2*(TBL + 30 + rad));
+    const y = H*0.3 + Math.random() * H*0.4;
+    let ok = true;
+    for(const o of obstacles){ if(Math.hypot(o.x-x, o.y-y) < o.r + rad + 26){ ok = false; break; } }
+    for(const u of powerups){ if(Math.hypot(u.x-x, u.y-y) < u.r + rad + 26){ ok = false; break; } }
+    if(ok){ powerups.push({type:type, x:x, y:y, r:rad, seed:Math.random()*6.28}); return; }
+  }
+}
+function sPow(){ beep(660,.07,"triangle",.05); setTimeout(()=>beep(880,.09,"triangle",.05),70); }
 
 /* ---------- Obstacles ---------- */
 const OB_DEFS = {pup:{r:24}, spring:{r:20}, yuzu:{r:13}, rock:{r:21}};
@@ -496,6 +553,14 @@ window.addEventListener("keydown", e=>{
   if(k==="arrowleft"||k==="arrowright"||k==="a"||k==="d") inputMode = "keys";
   if(k===" "){ audio(); if(state==="serve" && server==="player" && !paused) launch(); }
   if(k==="p" && (state==="play"||state==="serve") && document.getElementById("pauseMenu").classList.contains("hidden")) paused = !paused;
+  // ---- dev cheat mode (testing only; cheated matches aren't recorded) ----
+  if(k==="c" && (state==="play"||state==="serve")){ cheat = !cheat; beep(cheat ? 700 : 250, .08, "square", .04); }
+  if(cheat && (state==="play"||state==="serve") && !paused){
+    const grant = {"1":"leaf", "2":"flame", "3":"helper"}[k];
+    if(grant){ cheatUsed = true; applyPowerUp("player", grant); sPow(); }
+    if(k==="4"){ cheatUsed = true; spawnPowerup(); sPow(); }
+    if(k==="5"){ cheatUsed = true; applyPowerUp("ai", ["leaf","flame","helper"][Math.floor(Math.random()*3)]); sPow(); }
+  }
   if(k==="escape" && (state==="play"||state==="serve")){
     if(document.getElementById("pauseMenu").classList.contains("hidden")) openPause(); else closePause();
   }
@@ -521,6 +586,22 @@ function update(f){
   if(state!=="play" && state!=="serve") return;
   if(paused) return;
   if(serveMsgT > 0) serveMsgT -= f;
+
+  // power-up bookkeeping: tick boost timers, widen boosted paddles, move helper pups
+  for(const p of [player, ai]){
+    if(p.boostT > 0) p.boostT -= f;
+    p.w = p.baseW * (p.boostT > 0 ? BOOST_WIDTH : 1);
+    if(p.helperT > 0){
+      p.helperT -= f;
+      const hd = ball.x - p.helperX;
+      p.helperX += Math.sign(hd) * Math.min(Math.abs(hd), HELPER_SPEED * f);
+      p.helperX = Math.max(TBL + helperW(p)/2, Math.min(W - TBL - helperW(p)/2, p.helperX));
+    }
+  }
+  if(powerupsOn && state === "play"){
+    puTimer -= f;
+    if(puTimer <= 0 && powerups.length < 2){ spawnPowerup(); puTimer = 240 + Math.random()*240; }
+  }
 
   // player movement
   player.px = player.x;
@@ -568,6 +649,14 @@ function update(f){
   ball.x += ball.vx * f;
   ball.y += ball.vy * f;
 
+  // a flaming ball sheds glowing embers as it flies
+  if(ball.flaming) particles.push({
+    x:ball.x + (Math.random()-.5)*10, y:ball.y + (Math.random()-.5)*10,
+    vx:(Math.random()-.5)*0.8, vy:(Math.random()-.5)*0.8 - 0.3,
+    life:12 + Math.random()*10, r:1.5 + Math.random()*2.5,
+    col:Math.random() < 0.5 ? "#ff9c4a" : "#ffd97a"
+  });
+
   const r = 8;
   if(ball.x < TBL + r){ ball.x = TBL + r; ball.vx = Math.abs(ball.vx); ball.spin *= 0.6; sWall(); puff(ball.x, ball.y, 4, "#fff"); }
   if(ball.x > W - TBL - r){ ball.x = W - TBL - r; ball.vx = -Math.abs(ball.vx); ball.spin *= 0.6; sWall(); puff(ball.x, ball.y, 4, "#fff"); }
@@ -596,6 +685,18 @@ function update(f){
     }
   }
 
+  // power-up pickups: whoever hit the ball last collects the reward
+  for(let i=powerups.length-1;i>=0;i--){
+    const u = powerups[i];
+    if(Math.hypot(ball.x-u.x, ball.y-u.y) < u.r + r){
+      powerups.splice(i,1);
+      puff(u.x, u.y, 10, u.type === "flame" ? "#ff9c4a" : u.type === "leaf" ? "#9fe0a8" : "#f0d9b5");
+      sPow();
+      applyPowerUp(lastHit, u.type);
+      if(state !== "play") return;   // a bonus point may have ended the rally
+    }
+  }
+
   // paddle collisions
   const PH = 30;
   if(ball.vy > 0 && ball.y + r >= player.y - PH/2 && ball.y - r <= player.y + PH/2 &&
@@ -607,9 +708,33 @@ function update(f){
     hitBall(ai, 1);
   }
 
+  // helper pups: a last-ditch rescue line behind each paddle
+  if(player.helperT > 0 && ball.vy > 0 && ball.y + r >= H-40 && ball.y - r <= H-20 &&
+     Math.abs(ball.x - player.helperX) <= helperW(player)/2 + r){
+    helperBounce("player", player.helperX, H-30, -1);
+  }
+  if(ai.helperT > 0 && ball.vy < 0 && ball.y - r <= 40 && ball.y + r >= 20 &&
+     Math.abs(ball.x - ai.helperX) <= helperW(ai)/2 + r){
+    helperBounce("ai", ai.helperX, 30, 1);
+  }
+
   // scoring
   if(ball.y < -30) point("player");
   else if(ball.y > H + 30) point("ai");
+}
+
+function helperBounce(side, hx, hy, dir){
+  const hw = helperW(side === "player" ? player : ai);
+  const rel = Math.max(-1, Math.min(1, (ball.x - hx) / (hw/2)));
+  const sp = Math.max(diffBall()*0.9, ball.spd * 0.85);   // a soft rescue lob, not a smash
+  ball.vx = Math.sin(rel * 0.9) * sp;
+  ball.vy = dir * Math.abs(Math.cos(rel * 0.9) * sp);
+  ball.spd = sp; ball.spin *= 0.4; ball.wobble = 0;
+  ball.flaming = false;
+  ball.fxCol = "255,250,230";
+  ball.y = hy + dir * 16;
+  lastHit = side;
+  shake = 3; puff(ball.x, ball.y, 6, "#fff3d6"); sHit(sp*0.8);
 }
 
 function hitBall(p, dir){
@@ -622,12 +747,27 @@ function hitBall(p, dir){
   ball.spin = (p.vx * 0.06 + rel * 0.55) * p.spinPow;
   ball.wobble = 0;
   ball.fxCol = "255,250,230";
+  ball.flaming = false;
   ball.y = p.y + dir * 28;
   lastHit = (p === player) ? "player" : "ai";
   if(p === player) ai.err = rollAiErr();
-  shake = Math.min(8, 2 + sp*0.35);
-  puff(ball.x, ball.y, 8, "#fff3d6");
-  sHit(sp);
+  if(p.flame){
+    // flaming return: one extra-hot shot, then the flame is spent
+    p.flame = false;
+    const fsp = Math.min(diffMaxBall()*1.45, sp*1.6);
+    ball.vx *= fsp/sp; ball.vy *= fsp/sp; ball.spd = fsp;
+    ball.flaming = true;
+    ball.fxCol = "255,110,50";
+    if(p === player) ai.err = rollAiErr() * 1.8;   // a fireball is hard to read
+    flashCol = "rgba(255,150,60,.3)"; flashT = 8;
+    shake = 14;
+    puff(ball.x, ball.y, 18, "#ff9c4a"); puff(ball.x, ball.y, 8, "#ffd97a");
+    sBonk(); setTimeout(()=>beep(520,.1,"sawtooth",.05), 60);
+  }else{
+    shake = Math.min(8, 2 + sp*0.35);
+    puff(ball.x, ball.y, 8, "#fff3d6");
+    sHit(sp);
+  }
 }
 
 function point(who){
@@ -645,7 +785,8 @@ function fireConfetti(){
 function endMatch(){
   state = "over";
   const won = player.score > ai.score;
-  recordResult(won);
+  if(cheatUsed) lastDelta = 0;   // cheated matches don't touch the career record
+  else recordResult(won);
   if(won) fireConfetti();
   if(mode === "survival") return endSurvival(won);
   if(mode === "tournament") return endTournament(won);
@@ -661,7 +802,7 @@ function endMatch(){
        "A tough loss. " + player.char.name + " consoles itself with a yuzu.",
        "Difficulty " + difficulty + " (" + DIFF_NAMES[difficulty] + ") is no joke."];
   document.getElementById("overQuip").textContent = quips[Math.floor(Math.random()*quips.length)];
-  document.getElementById("overRank").textContent = rankLine();
+  document.getElementById("overRank").textContent = cheatUsed ? "Cheat mode used — match not recorded" : rankLine();
   document.getElementById("over").classList.remove("hidden");
 }
 
@@ -950,6 +1091,66 @@ function drawObstacles(){
   cx.textAlign = "left";
 }
 
+function drawFlameIcon(x, y, scale){
+  const t = performance.now()/1000;
+  const fl = (1 + Math.sin(t*12)*0.15) * (scale || 1);
+  cx.save(); cx.translate(x, y); cx.scale(fl, fl);
+  cx.fillStyle = "#f4772e";
+  cx.beginPath(); cx.moveTo(0, -12); cx.quadraticCurveTo(8, -2, 0, 8); cx.quadraticCurveTo(-8, -2, 0, -12); cx.fill();
+  cx.fillStyle = "#ffd046";
+  cx.beginPath(); cx.moveTo(0, -5); cx.quadraticCurveTo(4.5, 1, 0, 6); cx.quadraticCurveTo(-4.5, 1, 0, -5); cx.fill();
+  cx.restore();
+}
+function drawPupIcon(){
+  cx.fillStyle = "#b98a5a";
+  cx.beginPath(); cx.ellipse(-6, -8, 3, 2.6, -0.3, 0, Math.PI*2); cx.ellipse(6, -8, 3, 2.6, 0.3, 0, Math.PI*2); cx.fill();
+  cx.beginPath(); cx.ellipse(0, 0, 9, 8, 0, 0, Math.PI*2); cx.fill();
+  cx.fillStyle = "#d7b187";
+  cx.beginPath(); cx.ellipse(0, 3.5, 5, 3.5, 0, 0, Math.PI*2); cx.fill();
+  cx.fillStyle = "#34221a";
+  cx.beginPath(); cx.arc(-3.5, -2, 1.3, 0, Math.PI*2); cx.arc(3.5, -2, 1.3, 0, Math.PI*2); cx.fill();
+  cx.beginPath(); cx.ellipse(-1.6, 3.2, .8, 1.1, 0, 0, Math.PI*2); cx.ellipse(1.6, 3.2, .8, 1.1, 0, 0, Math.PI*2); cx.fill();
+}
+function drawPowerups(){
+  const t = performance.now()/1000;
+  for(const u of powerups){
+    cx.save();
+    cx.translate(u.x, u.y + Math.sin(t*2 + u.seed)*2);
+    // shared "this is a pickup!" language: shadow, warm glow, spinning dashed ring
+    const pulse = 1 + Math.sin(t*3 + u.seed)*0.08;
+    cx.fillStyle = "rgba(0,0,0,.12)";
+    cx.beginPath(); cx.ellipse(1, 10, 10, 4, 0, 0, Math.PI*2); cx.fill();
+    const glow = cx.createRadialGradient(0, 0, 4, 0, 0, 24);
+    glow.addColorStop(0, "rgba(255,246,190,.4)"); glow.addColorStop(1, "rgba(255,246,190,0)");
+    cx.fillStyle = glow; cx.beginPath(); cx.arc(0, 0, 24, 0, Math.PI*2); cx.fill();
+    cx.strokeStyle = "rgba(255,255,255," + (0.5 + Math.sin(t*3 + u.seed)*0.25).toFixed(2) + ")";
+    cx.lineWidth = 2; cx.setLineDash([5,5]); cx.lineDashOffset = -t*10;
+    cx.beginPath(); cx.arc(0, 0, 16*pulse, 0, Math.PI*2); cx.stroke();
+    cx.setLineDash([]);
+    if(u.type === "leaf"){
+      cx.rotate(Math.sin(t + u.seed)*0.15);
+      cx.fillStyle = "#6fae6f";
+      cx.beginPath(); cx.ellipse(0, 0, 12, 7, 0.4, 0, Math.PI*2); cx.fill();
+      cx.strokeStyle = "#4e8f5e"; cx.lineWidth = 1.5; cx.stroke();
+      cx.beginPath(); cx.moveTo(-9, 4); cx.quadraticCurveTo(0, -2, 10, -5); cx.stroke();
+    }else if(u.type === "flame"){
+      drawFlameIcon(0, 1, 1);
+    }else{
+      drawPupIcon();
+    }
+    cx.restore();
+  }
+}
+function drawHelper(p, y, dir){
+  cx.save();
+  // pups blink politely before they head home
+  if(p.helperT < 120) cx.globalAlpha = 0.45 + 0.55*Math.abs(Math.sin(p.helperT*0.09));
+  const s = p.boostT > 0 ? 0.75 : 0.5;   // a leaf-fed pup is drawn half again as big
+  cx.translate(p.helperX, y); cx.scale(s, s); cx.translate(-p.helperX, -y);
+  drawCapy({x:p.helperX, y:y, w:HELPER_W*2, char:p.char}, dir);
+  cx.restore();
+}
+
 function draw(){
   cx.save();
   if(shake > 0.3){
@@ -1005,6 +1206,15 @@ function draw(){
       cx.fillText(tag, W - TBL - 10, TBL + 22);
       cx.textAlign = "left";
     }
+    if(cheat){
+      cx.textAlign = "center"; cx.fillStyle = "rgba(255,120,90,.95)";
+      cx.font = "bold 13px 'Trebuchet MS', sans-serif";
+      cx.fillText("CHEAT MODE — not recorded", W/2, TBL + 22);
+      cx.font = "bold 11px 'Trebuchet MS', sans-serif";
+      cx.fillStyle = "rgba(255,240,200,.9)";
+      cx.fillText("1 leaf · 2 flame · 3 pup · 4 spawn item · 5 gift rival · C off", W/2, TBL + 38);
+      cx.textAlign = "left";
+    }
     if((player.score === winScore-1 || ai.score === winScore-1) && state !== "over"){
       cx.textAlign = "center"; cx.fillStyle = "rgba(255,240,200,.95)";
       cx.font = "bold 15px 'Trebuchet MS', sans-serif";
@@ -1012,6 +1222,7 @@ function draw(){
     }
 
     drawObstacles();
+    drawPowerups();
 
     // ball trail
     if(ball){
@@ -1028,8 +1239,13 @@ function draw(){
       cx.strokeStyle = "rgba(170,140,100,.6)"; cx.lineWidth = 1.5; cx.stroke();
     }
 
+    if(ai.helperT > 0) drawHelper(ai, 30, 1);
+    if(player.helperT > 0) drawHelper(player, H-30, -1);
     drawCapy(ai, 1);
     drawCapy(player, -1);
+    // a small flame hovers beside a paddle whose next shot is armed
+    if(ai.flame) drawFlameIcon(ai.x + ai.w/2 + 16, ai.y, 0.8);
+    if(player.flame) drawFlameIcon(player.x + player.w/2 + 16, player.y, 0.8);
 
     if(serveMsgT > 0){
       cx.save();
@@ -1212,6 +1428,12 @@ const obsEl = document.getElementById("obsToggle");
 obsEl.addEventListener("change", ()=>{
   obstaclesOn = obsEl.checked;
   beep(obstaclesOn ? 520 : 320, .06, "square", .03);
+});
+
+const puEl = document.getElementById("puToggle");
+puEl.addEventListener("change", ()=>{
+  powerupsOn = puEl.checked;
+  beep(powerupsOn ? 560 : 340, .06, "square", .03);
 });
 
 document.querySelectorAll("#winSegs .seg").forEach(b=>{
